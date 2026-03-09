@@ -89,25 +89,35 @@ def add_to_vector_store(vectorstore, text: str):
 
 def generate_answer(vectorstore, question: str):
     """
-    Retrieves relevant chunks and generates answer.
+    Retrieves relevant chunks and generates answer
     """
 
     retriever = vectorstore.as_retriever()
 
     docs = retriever.invoke(question)
 
-    context = "\n".join([doc.page_content for doc in docs])
+    # Extract only text content
+    context_chunks = [doc.page_content for doc in docs]
+
+    context = "\n".join(context_chunks)
 
     prompt = f"""
+You are a Business Intelligence assistant.
+
+Use the context below to answer the question.
+
 Context:
 {context}
 
-Question: {question}
+Question:
+{question}
 
-Answer clearly in this format:
-Product: <Product Name>
-Revenue: <Revenue Value>
+Give a short business answer.
 """
 
+    answer = query_llm(prompt)
 
-    return query_llm(prompt)
+    return {
+        "answer": answer,
+        "sources": context_chunks
+    }
