@@ -89,53 +89,79 @@ async def main(message: cl.Message):
     )
 
     if response.status_code != 200:
-        await cl.Message("❌ Backend error").send()
+        await cl.Message(content="❌ Backend error").send()
         return
 
     data = response.json()
 
+    # ----------------------------
+    # Detect Chart Response
+    # ----------------------------
+    if data.get("type") == "chart":
+
+        import plotly.graph_objects as go
+
+        products = data["products"]
+        revenues = data["revenues"]
+
+        fig = go.Figure(
+            data=[go.Bar(x=products, y=revenues)]
+        )
+
+        fig.update_layout(
+            title="Revenue by Product",
+            xaxis_title="Product",
+            yaxis_title="Revenue",
+            template="plotly_dark"
+        )
+
+        await cl.Message(
+            content="📊 Revenue Chart",
+            elements=[cl.Plotly(name="Revenue Chart", figure=fig)]
+        ).send()
+
+        return
+
+    # ----------------------------
+    # Normal Text Response
+    # ----------------------------
     answer = data.get("answer", "")
 
     await cl.Message(content=answer).send()
 
-    if "sources" in data and data["sources"]:
-        # remove duplicates
-        unique_sources = list(dict.fromkeys(data["sources"]))
+    # ----------------------------
+    # Context Display
+    # ----------------------------
+     
+    # if "sources" in data and data["sources"]:
 
-        context_text = "\n".join(unique_sources)
+    #     unique_sources = list(dict.fromkeys(data["sources"]))
 
-        await cl.Message(
-            content=f"📄 **Context Used:**\n{context_text}"
-        ).send()
+    #     context_text = "\n".join(unique_sources)
 
+    #     await cl.Message(
+    #         content=f"📄 **Context Used:**\n{context_text}"
+    #     ).send()
+    sources = data.get("sources", [])
 
-# ----------------------------
-# Revenue Chart Action
-# ----------------------------
-# @cl.action_callback("show_chart")
-# async def show_chart(action):
+    formatted_sources = []
 
-#     response = requests.get(f"{API_URL}/revenue-chart")
+    for src in sources:
+        if isinstance(src, dict):
+            row_text = ", ".join([f"{k}: {v}" for k, v in src.items()])
+            formatted_sources.append(row_text)
+        else:
+            formatted_sources.append(str(src))
 
-#     if response.status_code != 200:
-#         await cl.Message("❌ Could not generate chart").send()
-#         return
+# remove duplicates
+    unique_sources = list(dict.fromkeys(formatted_sources))
 
-#     data = response.json()
+    context_text = "\n".join(unique_sources)
 
-#     df = pd.DataFrame(
-#         list(data.items()),
-#         columns=["Product", "Revenue"]
-#     )
+    await cl.Message(
+        content=f"📄 **Context Used:**\n{context_text}"
+    ).send()
 
-#     fig = px.bar(
-#         df,
-#         x="Product",
-#         y="Revenue",
-#         title="Revenue by Product"
-#     )
-
-#     await cl.Plotly(name="Revenue Chart", figure=fig).send()
 import plotly.graph_objects as go
 
 @cl.action_callback("show_chart")
@@ -175,11 +201,6 @@ async def show_insights(action):
         return
 
     insights = response.json()["insights"]
-
-    # for insight in insights:
-    #     await cl.Message(
-    #         content=f"📊 {insight}"
-    #     ).send()
 
     insight_text = "\n".join([f"• {i}" for i in insights])
 

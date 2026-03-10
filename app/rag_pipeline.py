@@ -88,23 +88,28 @@ def add_to_vector_store(vectorstore, text: str):
 # ---------------------------
 
 def generate_answer(vectorstore, question: str):
-    """
-    Retrieves relevant chunks and generates answer
-    """
 
     retriever = vectorstore.as_retriever()
-
     docs = retriever.invoke(question)
 
-    # Extract only text content
-    context_chunks = [doc.page_content for doc in docs]
+    context = "\n".join([doc.page_content for doc in docs])
 
-    context = "\n".join(context_chunks)
+    # Extract simple metrics from context
+    import re
+
+    products = re.findall(r"Product:\s*(\w+)", context)
+    revenues = re.findall(r"Revenue:\s*(\d+)", context)
+
+    data = list(zip(products, revenues))
+
+    # find highest & lowest
+    highest = max(data, key=lambda x: int(x[1]))
+    lowest = min(data, key=lambda x: int(x[1]))
 
     prompt = f"""
-You are a Business Intelligence assistant.
+You are a Business Intelligence Assistant.
 
-Use the context below to answer the question.
+Analyze the dataset and summarize the key insights.
 
 Context:
 {context}
@@ -112,12 +117,13 @@ Context:
 Question:
 {question}
 
-Give a short business answer.
+Provide a concise business summary.
+Do not repeat rows or duplicate information.
 """
 
     answer = query_llm(prompt)
 
     return {
         "answer": answer,
-        "sources": context_chunks
+        "sources": [doc.page_content for doc in docs]
     }

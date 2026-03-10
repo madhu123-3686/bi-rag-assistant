@@ -46,7 +46,6 @@ async def upload_file(file: UploadFile = File(...)):
     os.makedirs("temp", exist_ok=True)
     file_path = os.path.join("temp", file.filename)
 
-    # Save uploaded file
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -54,7 +53,7 @@ async def upload_file(file: UploadFile = File(...)):
     df = load_csv(file_path)
     dataframes.append(df)
 
-    # Convert dataframe to text
+    # Convert to text
     text_data = dataframe_to_text(df)
 
     # Update vector store
@@ -69,7 +68,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 # -----------------------------
-# RAG Question Answering
+# Ask Question Endpoint
 # -----------------------------
 
 @app.post("/ask")
@@ -83,33 +82,53 @@ async def ask_question(question: str):
 
     q = question.lower()
 
-    # Highest revenue product
+    # -----------------------------
+    # Highest Revenue Product
+    # -----------------------------
+
     if "highest revenue" in q or "top product" in q:
+
         row = df.loc[df["Revenue"].idxmax()]
+
         return {
             "answer": f"{row['Product']} generated the highest revenue ({row['Revenue']}).",
             "sources": [row.to_dict()]
         }
 
-    # Total revenue
-    if "total revenue" in q:
-        total = int(df["Revenue"].sum())
-        return {
-            "answer": f"The total revenue is {total}.",
-            "sources": df.to_dict(orient="records")
-        }
+    # -----------------------------
+    # Lowest Revenue Product
+    # -----------------------------
 
-    # Lowest revenue
     if "lowest revenue" in q:
+
         row = df.loc[df["Revenue"].idxmin()]
+
         return {
             "answer": f"{row['Product']} generated the lowest revenue ({row['Revenue']}).",
             "sources": [row.to_dict()]
         }
 
-    # Region performance
+    # -----------------------------
+    # Total Revenue
+    # -----------------------------
+
+    if "total revenue" in q:
+
+        total = int(df["Revenue"].sum())
+
+        return {
+            "answer": f"The total revenue is {total}.",
+            "sources": df.to_dict(orient="records")
+        }
+
+    # -----------------------------
+    # Region Performance
+    # -----------------------------
+
     if "region" in q and "best" in q:
+
         region_revenue = df.groupby("Region")["Revenue"].sum()
+
         best_region = region_revenue.idxmax()
         best_value = int(region_revenue.max())
 
@@ -118,7 +137,46 @@ async def ask_question(question: str):
             "sources": df.to_dict(orient="records")
         }
 
-    # Fallback → RAG
+    # -----------------------------
+    # Chart Requests
+    # -----------------------------
+
+    if "chart" in q or "plot" in q or "visualize" in q or "graph" in q:
+
+        revenue_data = df.groupby("Product")["Revenue"].sum().reset_index()
+
+        return {
+            "type": "chart",
+            "products": revenue_data["Product"].tolist(),
+            "revenues": revenue_data["Revenue"].tolist()
+        }
+     # Business summary
+    if "summary" in q or "business summary" in q:
+        total_revenue = int(df["Revenue"].sum())
+        avg_revenue = round(float(df["Revenue"].mean()), 2)
+
+        top_row = df.loc[df["Revenue"].idxmax()]
+        best_product = str(top_row["Product"])
+
+        region_revenue = df.groupby("Region")["Revenue"].sum()
+        best_region = region_revenue.idxmax()
+
+        return {
+             "answer": f"""
+    Business Summary:
+
+    • Total Revenue: {total_revenue}
+    • Average Revenue: {avg_revenue}
+    • Top Product: {best_product}
+    • Best Performing Region: {best_region}
+    """,
+            "sources": df.to_dict(orient="records")
+        }
+
+    # -----------------------------
+    # RAG Fallback
+    # -----------------------------
+
     result = generate_answer(vectorstore, question)
 
     return {
@@ -128,7 +186,7 @@ async def ask_question(question: str):
 
 
 # -----------------------------
-# Deterministic Highest Revenue
+# Highest Revenue Endpoint
 # -----------------------------
 
 @app.get("/highest-revenue")
@@ -138,30 +196,16 @@ def highest_revenue():
     if not dataframes:
         raise HTTPException(status_code=400, detail="No data uploaded.")
 
-    combined_df = pd.concat(dataframes, ignore_index=True)
+    df = pd.concat(dataframes, ignore_index=True)
 
-    if "Revenue" not in combined_df.columns or "Product" not in combined_df.columns:
-        raise HTTPException(
-            status_code=400,
-            detail="CSV must contain Product and Revenue columns."
-        )
-
-    max_row = combined_df.loc[combined_df["Revenue"].idxmax()]
+    max_row = df.loc[df["Revenue"].idxmax()]
 
     product = str(max_row["Product"])
     revenue = int(max_row["Revenue"])
 
-    explanation_prompt = f"""
-    The product {product} generated revenue of {revenue}.
-    Provide a short professional business explanation.
-    """
-
-    explanation, _ = generate_answer(vectorstore, explanation_prompt)
-
     return {
         "product": product,
-        "revenue": revenue,
-        "explanation": explanation
+        "revenue": revenue
     }
 
 
@@ -178,9 +222,9 @@ def get_summary():
 
     summary_prompt = "Provide a professional business summary of the indexed data."
 
-    summary, _ = generate_answer(vectorstore, summary_prompt)
+    result = generate_answer(vectorstore, summary_prompt)
 
-    return {"summary": summary}
+    return {"summary": result["answer"]}
 
 
 # -----------------------------
@@ -196,7 +240,6 @@ def revenue_chart():
 
     df = pd.concat(dataframes, ignore_index=True)
 
-    # Aggregate revenue by product
     revenue_data = df.groupby("Product")["Revenue"].sum().reset_index()
 
     return {
@@ -206,33 +249,11 @@ def revenue_chart():
 
 
 # -----------------------------
-# Auto Insights
+# Business Insights
 # -----------------------------
 
-# @app.get("/insights")
-# def insights():
-#     global dataframes
-
-#     if not dataframes:
-#         raise HTTPException(status_code=400, detail="No data uploaded.")
-
-#     df = pd.concat(dataframes)
-
-#     top_product = df.loc[df["Revenue"].idxmax()]
-#     lowest_product = df.loc[df["Revenue"].idxmin()]
-
-#     insights = [
-#         f"Top product: {top_product['Product']} ({top_product['Revenue']})",
-#         f"Lowest revenue product: {lowest_product['Product']}",
-#         f"Total revenue: {df['Revenue'].sum()}",
-#         f"Average revenue: {round(float(df['Revenue'].mean()),2)}",
-#         f"Number of products: {df['Product'].nunique()}"
-#     ]
-
-#     return {"insights": insights}
-
 @app.get("/insights")
-def get_insights():
+def insights():
     global dataframes
 
     if not dataframes:
@@ -240,25 +261,15 @@ def get_insights():
 
     df = pd.concat(dataframes, ignore_index=True)
 
-    # Highest revenue row
     top_row = df.loc[df["Revenue"].idxmax()]
-    top_product = str(top_row["Product"])
-    top_revenue = int(top_row["Revenue"])
-
-    # Lowest revenue row
     low_row = df.loc[df["Revenue"].idxmin()]
-    low_product = str(low_row["Product"])
-
-    total_revenue = int(df["Revenue"].sum())
-    avg_revenue = round(float(df["Revenue"].mean()), 2)
-    num_products = int(df["Product"].nunique())
 
     insights = [
-        f"Top product: {top_product} ({top_revenue})",
-        f"Lowest revenue product: {low_product}",
-        f"Total revenue: {total_revenue}",
-        f"Average revenue: {avg_revenue}",
-        f"Number of products: {num_products}"
+        f"Top product: {top_row['Product']} ({top_row['Revenue']})",
+        f"Lowest revenue product: {low_row['Product']}",
+        f"Total revenue: {int(df['Revenue'].sum())}",
+        f"Average revenue: {round(float(df['Revenue'].mean()), 2)}",
+        f"Number of products: {int(df['Product'].nunique())}"
     ]
 
     return {"insights": insights}
