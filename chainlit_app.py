@@ -144,23 +144,23 @@ async def main(message: cl.Message):
     #     ).send()
     sources = data.get("sources", [])
 
-    formatted_sources = []
+# Only show context if sources exist
+    if sources:
+        formatted_sources = []
 
-    for src in sources:
-        if isinstance(src, dict):
-            row_text = ", ".join([f"{k}: {v}" for k, v in src.items()])
-            formatted_sources.append(row_text)
-        else:
-            formatted_sources.append(str(src))
+        for src in sources:
+            if isinstance(src, dict):
+                row_text = ", ".join([f"{k}: {v}" for k, v in src.items()])
+                formatted_sources.append(row_text)
+            else:
+                formatted_sources.append(str(src))
 
-# remove duplicates
-    unique_sources = list(dict.fromkeys(formatted_sources))
+        unique_sources = list(dict.fromkeys(formatted_sources))
+        context_text = "\n".join(unique_sources)
 
-    context_text = "\n".join(unique_sources)
-
-    await cl.Message(
-        content=f"📄 **Context Used:**\n{context_text}"
-    ).send()
+        await cl.Message(
+            content=f"📄 **Context Used:**\n{context_text}"
+        ).send() 
 
 import plotly.graph_objects as go
 

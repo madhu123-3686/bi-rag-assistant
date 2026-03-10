@@ -92,7 +92,7 @@ async def ask_question(question: str):
 
         return {
             "answer": f"{row['Product']} generated the highest revenue ({row['Revenue']}).",
-            "sources": [row.to_dict()]
+            "sources": []
         }
 
     # -----------------------------
@@ -105,7 +105,7 @@ async def ask_question(question: str):
 
         return {
             "answer": f"{row['Product']} generated the lowest revenue ({row['Revenue']}).",
-            "sources": [row.to_dict()]
+            "sources": []
         }
 
     # -----------------------------
@@ -118,7 +118,7 @@ async def ask_question(question: str):
 
         return {
             "answer": f"The total revenue is {total}.",
-            "sources": df.to_dict(orient="records")
+            "sources": []
         }
 
     # -----------------------------
@@ -134,7 +134,7 @@ async def ask_question(question: str):
 
         return {
             "answer": f"{best_region} performs best with total revenue of {best_value}.",
-            "sources": df.to_dict(orient="records")
+            "sources": []
         }
 
     # -----------------------------
@@ -161,17 +161,18 @@ async def ask_question(question: str):
         region_revenue = df.groupby("Region")["Revenue"].sum()
         best_region = region_revenue.idxmax()
 
-        return {
-             "answer": f"""
-    Business Summary:
+        summary = (
+    "📊 Business Summary\n\n"
+    f"• Total Revenue: {total_revenue}\n"
+    f"• Average Revenue: {avg_revenue}\n"
+    f"• Top Product: {best_product}\n"
+    f"• Best Performing Region: {best_region}"
+)
 
-    • Total Revenue: {total_revenue}
-    • Average Revenue: {avg_revenue}
-    • Top Product: {best_product}
-    • Best Performing Region: {best_region}
-    """,
-            "sources": df.to_dict(orient="records")
-        }
+        return {
+            "answer": summary,
+            "sources": []
+       }
 
     # -----------------------------
     # RAG Fallback
